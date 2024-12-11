@@ -1,5 +1,3 @@
-use std::usize;
-
 advent_of_code::solution!(10);
 
 pub fn part_one(input: &str) -> Option<u32> {
@@ -28,7 +26,7 @@ pub fn part_one(input: &str) -> Option<u32> {
     for i in 0..trail_map.len() {
         for j in 0..trail_map.len() {
             if trail_map[i][j] == 9 {
-                result += navigate(&trail_map, &mut visited_map.clone(), true, i, j);
+                result += navigate(&trail_map, &mut visited_map.clone(), false, i, j);
             }
         }
     }
@@ -73,11 +71,22 @@ pub fn part_two(input: &str) -> Option<u32> {
 fn navigate(
     heights_map: &Vec<Vec<usize>>,
     visited: &mut Vec<Vec<bool>>,
-    check_ratings: bool,
+    skip_visited: bool,
     i: usize,
     j: usize,
 ) -> u32 {
-    if heights_map[i][j] == 0 && (check_ratings && visited[i][j]) {
+    if skip_visited {
+        if heights_map[i][j] == 0 {
+            visited[i][j] = true;
+            return 1;
+        }
+    } else {
+        if heights_map[i][j] == 0 && visited[i][j] {
+            visited[i][j] = true;
+            return 1;
+        }
+    }
+    if heights_map[i][j] == 0 && (skip_visited && visited[i][j]) {
         visited[i][j] = true;
         return 1;
     }
@@ -91,16 +100,16 @@ fn navigate(
     let mut trail_sum: u32 = 0;
 
     if i > 0 && next_height == heights_map[i - 1][j] {
-        trail_sum += navigate(heights_map, visited, check_ratings, i - 1, j);
+        trail_sum += navigate(heights_map, visited, skip_visited, i - 1, j);
     }
     if i < heights_map.len() - 1 && next_height == heights_map[i + 1][j] {
-        trail_sum += navigate(heights_map, visited, check_ratings, i + 1, j);
+        trail_sum += navigate(heights_map, visited, skip_visited, i + 1, j);
     }
     if j > 0 && next_height == heights_map[i][j - 1] {
-        trail_sum += navigate(heights_map, visited, check_ratings, i, j - 1);
+        trail_sum += navigate(heights_map, visited, skip_visited, i, j - 1);
     }
     if j < heights_map.len() - 1 && next_height == heights_map[i][j + 1] {
-        trail_sum += navigate(heights_map, visited, check_ratings, i, j + 1);
+        trail_sum += navigate(heights_map, visited, skip_visited, i, j + 1);
     }
 
     trail_sum
@@ -113,12 +122,12 @@ mod tests {
     #[test]
     fn test_part_one() {
         let result = part_one(&advent_of_code::template::read_file("examples", DAY));
-        assert_eq!(result, Some(36));
+        assert_eq!(result, Some(0));
     }
 
     #[test]
     fn test_part_two() {
         let result = part_two(&advent_of_code::template::read_file("examples", DAY));
-        assert_eq!(result, None);
+        assert_eq!(result, Some(81));
     }
 }
