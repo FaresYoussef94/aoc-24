@@ -22,7 +22,7 @@ pub fn part_two(input: &str) -> Option<u32> {
     let mut file = fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open("/home/ec2-user/aoc-24/data/examples/day142.txt")
+        .open("./data/examples/day142.txt")
         .ok()
         .unwrap();
 
