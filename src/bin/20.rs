@@ -1,4 +1,6 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
 advent_of_code::solution!(20);
 
@@ -9,8 +11,6 @@ struct Map {
     end: Point,
     path: HashMap<Point, usize>,
     visited: Vec<Vec<bool>>,
-    shortcuts: HashMap<String, usize>,
-    visited_shortcuts: HashSet<String>,
 }
 
 impl Map {
@@ -39,54 +39,43 @@ impl Map {
             i += 1;
         });
         let visited = vec![vec![false; def.len()]; def.len()];
-        let shortcuts = HashMap::new();
-        let visited_shortcuts = HashSet::new();
         Self {
             def,
             start,
             end,
             path,
             visited,
-            shortcuts,
-            visited_shortcuts,
         }
     }
 
     fn count_cheats_above(&mut self, saved_time: usize, remaining_cheats: usize) -> usize {
         self.traverse(self.start.i, self.start.j, 0);
 
-        let path_keys: Vec<Point> = self.path.keys().cloned().collect();
+        let mut sorted_path = self.path.iter().collect::<Vec<_>>();
+        sorted_path.sort_by(|a, b| a.1.cmp(b.1));
 
-        for point in path_keys {
-            let i = point.i;
-            let j = point.j;
+        sorted_path
+            .par_iter()
+            .enumerate()
+            .map(|(i, (ip, id))| {
+                sorted_path
+                    .iter()
+                    .skip(i + 1)
+                    .enumerate()
+                    .filter(|(_j, (jp, jd))| {
+                        if id >= jd {
+                            return false;
+                        }
 
-            self.update_cheats_score(i, j, i - 1, j, remaining_cheats - 1);
-            self.update_cheats_score(i, j, i + 1, j, remaining_cheats - 1);
-            self.update_cheats_score(i, j, i, j - 1, remaining_cheats - 1);
-            self.update_cheats_score(i, j, i, j + 1, remaining_cheats - 1);
-        }
+                        let distance = *jd - *id;
+                        let manhattan_distance = ip.i.abs_diff(jp.i) + ip.j.abs_diff(jp.j);
 
-        let mut lookup: HashMap<usize, usize> = HashMap::new();
-
-        for (_key, val) in self.shortcuts.iter() {
-            lookup.entry(*val).and_modify(|os| *os += 1).or_insert(1);
-        }
-
-        let mut sorted: Vec<_> = lookup.iter().collect();
-        sorted.sort_by(|a, b| a.0.cmp(b.0).then_with(|| b.1.cmp(a.1)));
-
-        for (key, value) in sorted {
-            if *key >= 50 {
-                println!("There are {} with value {}", value, key);
-            }
-        }
-
-        lookup
-            .iter()
-            .filter(|(k, _v)| **k >= saved_time)
-            .map(|(_k, v)| v)
-            .sum::<usize>()
+                        manhattan_distance <= remaining_cheats
+                            && distance - manhattan_distance >= saved_time
+                    })
+                    .count()
+            })
+            .sum()
     }
 
     fn traverse(&mut self, ci: usize, cj: usize, score: usize) -> bool {
@@ -112,84 +101,6 @@ impl Map {
             false
         }
     }
-
-    fn update_cheats_score(
-        &mut self,
-        i: usize,
-        j: usize,
-        wi: usize,
-        wj: usize,
-        remaining_cheats: usize,
-    ) {
-        if self.def[wi][wj].ptype != '#' || remaining_cheats == 0 {
-            return;
-        }
-
-        if self
-            .visited_shortcuts
-            .contains(&format!("{}-{}-{}-{}", i, j, wi, wj).to_string())
-        {
-            return;
-        }
-
-        self.visited_shortcuts
-            .insert(format!("{}-{}-{}-{}", i, j, wi, wj));
-
-        let max = self.def.len() - 1;
-
-        // check up
-        if wi > 0 && wi - 1 != i {
-            let pi = wi - 1;
-            let pj = wj;
-            self.comp_and_update(i, j, pi, pj);
-            self.update_cheats_score(i, j, pi, pj, remaining_cheats - 1);
-        }
-        // check down
-        if wi < max && wi + 1 != i {
-            let pi = wi + 1;
-            let pj = wj;
-            self.comp_and_update(i, j, pi, pj);
-            self.update_cheats_score(i, j, pi, pj, remaining_cheats - 1);
-        }
-        // check left
-        if wj > 0 && wj - 1 != j {
-            let pi = wi;
-            let pj = wj - 1;
-            self.comp_and_update(i, j, pi, pj);
-            self.update_cheats_score(i, j, pi, pj, remaining_cheats - 1);
-        }
-        // check right
-        if wj < max && wj + 1 != j {
-            let pi = wi;
-            let pj = wj + 1;
-            self.comp_and_update(i, j, pi, pj);
-            self.update_cheats_score(i, j, pi, pj, remaining_cheats - 1);
-        }
-    }
-
-    fn comp_and_update(&mut self, i: usize, j: usize, pi: usize, pj: usize) {
-        if !self.path.contains_key(&self.def[pi][pj]) {
-            return;
-        }
-
-        let cheat_key = format!("{}-{}->{}-{}", i, j, pi, pj);
-        let score = self.path.get(&self.def[i][j]).unwrap();
-        let pscore = self.path.get(&self.def[pi][pj]).unwrap();
-        let si = self.def[i][j].i;
-        let sj = self.def[i][j].j;
-        let ei = self.def[pi][pj].i;
-        let ej = self.def[pi][pj].j;
-        let abs_diff = si.abs_diff(ei) + sj.abs_diff(ej);
-
-        if *pscore <= score + abs_diff {
-            return;
-        }
-
-        self.shortcuts
-            .entry(cheat_key)
-            .and_modify(|os| *os = (*os).max(*pscore - score - abs_diff))
-            .or_insert(pscore - score - abs_diff);
-    }
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
@@ -206,7 +117,7 @@ pub fn part_one(input: &str) -> Option<usize> {
 }
 
 pub fn part_two(input: &str) -> Option<usize> {
-    solve(input, 100, 19)
+    solve(input, 100, 20)
 }
 
 fn solve(input: &str, max: usize, remaining_cheats: usize) -> Option<usize> {
