@@ -20,6 +20,7 @@ today = ["chrono"]
 test_lib = []
 
 [dependencies]
+anyhow = "1.0.95"
 cached = "0.54.0"
 
 # Template dependencies
